@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ManuPuntos - Point Tracker</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/date-fns@2.29.3/index.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>ManuPuntos</h1>
+            <p>Track your progress with points and reasons</p>
+            <div class="user-selector">
+                <label for="currentUser">Current User:</label>
+                <select id="currentUser">
+                    <option value="Manu">Manu</option>
+                </select>
+                <button id="addUserBtn" class="btn-small">Add User</button>
+            </div>
+        </header>
+
+        <main>
+            <div class="score-display">
+                <h2>Current Score</h2>
+                <div id="currentScore" class="score">0</div>
+            </div>
+
+            <div class="input-section">
+                <div class="reason-input">
+                    <label for="reason">Reason:</label>
+                    <textarea id="reason" placeholder="Enter a reason for this point..."></textarea>
+                </div>
+
+                <div class="buttons">
+                    <button id="positiveBtn" class="btn positive">+1 Point</button>
+                    <button id="neutralBtn" class="btn neutral">Neutral Point</button>
+                    <button id="negativeBtn" class="btn negative">-1 Point</button>
+                </div>
+
+                <div class="bulk-input">
+                    <h3>Add Multiple Points</h3>
+                    <div class="bulk-controls">
+                        <input type="number" id="bulkQuantity" placeholder="Quantity" min="1" max="100">
+                        <select id="bulkType">
+                            <option value="positive">Positive (+1 each)</option>
+                            <option value="neutral">Neutral (0 each)</option>
+                            <option value="negative">Negative (-1 each)</option>
+                        </select>
+                        <button id="bulkAddBtn" class="btn bulk">Add Bulk Points</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chart-section">
+                <h3>Progress Over Time</h3>
+                <div class="chart-container">
+                    <canvas id="progressChart"></canvas>
+                </div>
+            </div>
+
+            <div class="all-users-section">
+                <h3>All Users Stats</h3>
+                <div id="allUsersStats" class="users-stats-grid"></div>
+            </div>
+
+            <div class="history-section">
+                <h3>Recent Entries</h3>
+                <div id="historyList" class="history-list"></div>
+                <div class="history-controls">
+                    <button id="clearHistoryBtn" class="btn clear">Clear All History</button>
+                    <button id="enableSyncBtn" class="btn sync">Enable Cloud Sync</button>
+                    <button id="disableSyncBtn" class="btn sync-disable" style="display: none;">Disable Cloud Sync</button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
