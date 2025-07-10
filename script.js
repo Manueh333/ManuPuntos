@@ -6,13 +6,15 @@ class ManuPuntos {
         this.chart = null;
         this.cloudSyncEnabled = false;
         this.syncKey = null;
+        this.firebase = null;
+        this.database = null;
         this.clearHistoryPassword = 'ManuPuntos2025'; // Change this to your preferred password
         this.initializeElements();
+        this.initializeFirebase();
         this.loadData();
         this.setupEventListeners();
         this.switchUser('Manu');
         this.initializeChart();
-        this.initializeCloudSync();
     }
 
     initializeElements() {
@@ -32,6 +34,7 @@ class ManuPuntos {
         this.userSelector = document.getElementById('currentUser');
         this.addUserBtn = document.getElementById('addUserBtn');
         this.allUsersStats = document.getElementById('allUsersStats');
+        this.syncStatus = document.getElementById('syncStatus');
     }
 
     setupEventListeners() {
@@ -385,13 +388,15 @@ class ManuPuntos {
     }
 
     saveData() {
+        const now = new Date().toISOString();
         const data = {
             users: this.users,
             currentUser: this.currentUser,
-            lastUpdated: new Date().toISOString(),
+            lastUpdated: now,
             syncKey: this.syncKey
         };
         localStorage.setItem('manuPuntosData', JSON.stringify(data));
+        localStorage.setItem('manuPuntosLastUpdated', now);
         this.syncToCloud();
     }
 
@@ -427,70 +432,170 @@ class ManuPuntos {
     }
 
 
-    // Cloud sync functionality using GitHub Gist as storage
-    initializeCloudSync() {
-        if (!this.syncKey) {
-            // Generate a unique sync key for this device/user
-            this.syncKey = 'manupuntos_' + Math.random().toString(36).substr(2, 16);
-            this.saveData();
+    // Firebase initialization and cloud sync functionality
+    initializeFirebase() {
+        // Firebase configuration for ManuPuntos
+        const firebaseConfig = {
+            apiKey: "AIzaSyDbVa7lWGhClZD4mumRGtu7Rl_wUWABriY",
+            authDomain: "manupuntos-web.firebaseapp.com",
+            databaseURL: "https://manupuntos-web-default-rtdb.firebaseio.com/",
+            projectId: "manupuntos-web",
+            storageBucket: "manupuntos-web.firebasestorage.app",
+            messagingSenderId: "610732590615",
+            appId: "1:610732590615:web:ceb4539533dfa83e9a3e52"
+        };
+
+        try {
+            if (typeof firebase !== 'undefined') {
+                // Initialize Firebase
+                firebase.initializeApp(firebaseConfig);
+                this.database = firebase.database();
+                this.updateSyncStatus('🔧 Firebase connected - Ready to sync');
+                console.log('Firebase initialized successfully');
+            } else {
+                console.warn('Firebase not loaded, sync disabled');
+                this.updateSyncStatus('⚠️ Firebase not loaded - Sync disabled');
+            }
+        } catch (error) {
+            console.error('Firebase initialization failed:', error);
+            this.updateSyncStatus('❌ Firebase initialization failed');
+        }
+    }
+
+    updateSyncStatus(message) {
+        if (this.syncStatus) {
+            this.syncStatus.textContent = message;
+            this.syncStatus.className = 'sync-status ' + 
+                (message.includes('✅') ? 'success' : 
+                 message.includes('❌') ? 'error' : 
+                 message.includes('⚠️') ? 'warning' : 'info');
         }
     }
 
     async syncToCloud() {
-        if (!this.cloudSyncEnabled) return;
+        if (!this.cloudSyncEnabled || !this.database || !this.syncKey) {
+            return;
+        }
         
         try {
+            this.updateSyncStatus('📤 Syncing to cloud...');
+            
             const data = {
-                entries: this.entries,
-                currentScore: this.currentScore,
+                users: this.users,
+                currentUser: this.currentUser,
                 lastUpdated: new Date().toISOString(),
                 syncKey: this.syncKey
             };
             
-            // Use jsonbin.io as a simple cloud storage (free tier)
-            const response = await fetch('https://api.jsonbin.io/v3/b', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Master-Key': '$2a$10$0EqhXjFvJFvJFvJFvJFvJOeNbMGJGPMGPMGPMGPMGPMGPMGPMGPMGP', // You'll need to get your own API key
-                    'X-Bin-Name': this.syncKey
-                },
-                body: JSON.stringify(data)
-            });
+            await this.database.ref('manupuntos/' + this.syncKey).set(data);
+            this.updateSyncStatus('✅ Synced successfully');
             
-            if (response.ok) {
-                console.log('Data synced to cloud successfully');
-            }
+            // Clear status after 3 seconds
+            setTimeout(() => {
+                this.updateSyncStatus('🌐 Cloud sync enabled');
+            }, 3000);
+            
         } catch (error) {
             console.error('Cloud sync failed:', error);
+            this.updateSyncStatus('❌ Sync failed: ' + error.message);
         }
     }
 
     async loadFromCloud() {
-        if (!this.cloudSyncEnabled) return;
+        if (!this.cloudSyncEnabled || !this.database || !this.syncKey) {
+            return;
+        }
         
         try {
-            // This would load from your cloud storage
-            // Implementation depends on your chosen cloud service
-            console.log('Loading from cloud...');
+            this.updateSyncStatus('📥 Loading from cloud...');
+            
+            const snapshot = await this.database.ref('manupuntos/' + this.syncKey).once('value');
+            const cloudData = snapshot.val();
+            
+            if (cloudData && cloudData.users) {
+                // Merge cloud data with local data
+                const localLastUpdated = new Date(localStorage.getItem('manuPuntosLastUpdated') || '1970-01-01');
+                const cloudLastUpdated = new Date(cloudData.lastUpdated || '1970-01-01');
+                
+                if (cloudLastUpdated > localLastUpdated) {
+                    this.users = cloudData.users;
+                    this.currentUser = cloudData.currentUser || 'Manu';
+                    this.updateUserSelector();
+                    this.switchUser(this.currentUser);
+                    this.updateSyncStatus('✅ Data loaded from cloud');
+                } else {
+                    this.updateSyncStatus('ℹ️ Local data is newer');
+                }
+            } else {
+                this.updateSyncStatus('ℹ️ No cloud data found');
+            }
+            
         } catch (error) {
             console.error('Failed to load from cloud:', error);
+            this.updateSyncStatus('❌ Failed to load from cloud');
         }
     }
 
+    setupCloudSync() {
+        if (!this.database || !this.syncKey) return;
+        
+        // Listen for real-time changes
+        this.database.ref('manupuntos/' + this.syncKey).on('value', (snapshot) => {
+            const cloudData = snapshot.val();
+            if (cloudData && cloudData.users) {
+                const cloudLastUpdated = new Date(cloudData.lastUpdated || '1970-01-01');
+                const localLastUpdated = new Date(localStorage.getItem('manuPuntosLastUpdated') || '1970-01-01');
+                
+                // Only update if cloud data is newer and we didn't just update it
+                if (cloudLastUpdated > localLastUpdated && 
+                    Math.abs(cloudLastUpdated - new Date()) > 2000) { // 2 second buffer
+                    
+                    this.users = cloudData.users;
+                    this.currentUser = cloudData.currentUser || this.currentUser;
+                    this.updateUserSelector();
+                    this.switchUser(this.currentUser);
+                    this.updateSyncStatus('🔄 Synced from another device');
+                    
+                    // Clear status after 3 seconds
+                    setTimeout(() => {
+                        this.updateSyncStatus('🌐 Cloud sync enabled');
+                    }, 3000);
+                }
+            }
+        });
+    }
+
     enableCloudSync() {
+        if (!this.database) {
+            alert('⚠️ Firebase not available. Cloud sync disabled.');
+            return;
+        }
+        
         const syncKey = prompt('Enter your sync key to sync with another device\n(or leave empty to create new):');
         if (syncKey && syncKey.trim()) {
             this.syncKey = syncKey.trim();
+        } else {
+            // Generate a unique sync key
+            this.syncKey = 'manupuntos_' + Math.random().toString(36).substr(2, 16);
         }
+        
         this.cloudSyncEnabled = true;
         this.saveData();
+        
+        // Setup real-time sync
+        this.setupCloudSync();
+        
+        // Initial sync to cloud
+        this.syncToCloud();
+        
+        // Load any existing data from cloud
+        this.loadFromCloud();
         
         // Toggle button visibility
         this.enableSyncBtn.style.display = 'none';
         this.disableSyncBtn.style.display = 'inline-block';
         
-        alert(`Cloud sync enabled!\nYour sync key: ${this.syncKey}\n\nShare this key with your other devices to sync data.`);
+        alert(`🌐 Cloud sync enabled!\nYour sync key: ${this.syncKey}\n\nShare this key with your other devices to sync data.`);
     }
 
     disableCloudSync() {
@@ -597,15 +702,3 @@ document.addEventListener('DOMContentLoaded', () => {
     new ManuPuntos();
 });
 
-// Service Worker registration for offline functionality (optional)
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js')
-            .then(registration => {
-                console.log('SW registered: ', registration);
-            })
-            .catch(registrationError => {
-                console.log('SW registration failed: ', registrationError);
-            });
-    });
-}

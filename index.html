@@ -7,6 +7,9 @@
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/date-fns@2.29.3/index.min.js"></script>
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 </head>
 <body>
     <div class="container">
@@ -74,6 +77,7 @@
                     <button id="enableSyncBtn" class="btn sync">Enable Cloud Sync</button>
                     <button id="disableSyncBtn" class="btn sync-disable" style="display: none;">Disable Cloud Sync</button>
                 </div>
+                <div id="syncStatus" class="sync-status"></div>
             </div>
         </main>
     </div>
