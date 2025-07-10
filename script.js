@@ -5,7 +5,6 @@ class ManuPuntos {
         this.currentUser = 'Manu';
         this.chart = null;
         this.cloudSyncEnabled = false;
-        this.syncKey = null;
         this.firebase = null;
         this.database = null;
         this.clearHistoryPassword = 'ManuPuntos2025'; // Change this to your preferred password
@@ -27,8 +26,6 @@ class ManuPuntos {
         this.bulkTypeSelect = document.getElementById('bulkType');
         this.bulkAddBtn = document.getElementById('bulkAddBtn');
         this.clearHistoryBtn = document.getElementById('clearHistoryBtn');
-        this.enableSyncBtn = document.getElementById('enableSyncBtn');
-        this.disableSyncBtn = document.getElementById('disableSyncBtn');
         this.historyList = document.getElementById('historyList');
         this.chartCanvas = document.getElementById('progressChart');
         this.userSelector = document.getElementById('currentUser');
@@ -43,8 +40,6 @@ class ManuPuntos {
         this.negativeBtn.addEventListener('click', () => this.addPoints(-1, 'negative'));
         this.bulkAddBtn.addEventListener('click', () => this.addBulkPoints());
         this.clearHistoryBtn.addEventListener('click', () => this.clearHistory());
-        this.enableSyncBtn.addEventListener('click', () => this.enableCloudSync());
-        this.disableSyncBtn.addEventListener('click', () => this.disableCloudSync());
         this.userSelector.addEventListener('change', (e) => this.switchUser(e.target.value));
         this.addUserBtn.addEventListener('click', () => this.addNewUser());
         
@@ -392,8 +387,7 @@ class ManuPuntos {
         const data = {
             users: this.users,
             currentUser: this.currentUser,
-            lastUpdated: now,
-            syncKey: this.syncKey
+            lastUpdated: now
         };
         localStorage.setItem('manuPuntosData', JSON.stringify(data));
         localStorage.setItem('manuPuntosLastUpdated', now);
@@ -407,7 +401,6 @@ class ManuPuntos {
                 const data = JSON.parse(savedData);
                 this.users = data.users || { 'Manu': { entries: [], currentScore: 0 } };
                 this.currentUser = data.currentUser || 'Manu';
-                this.syncKey = data.syncKey || null;
                 
                 // Ensure all users have proper structure
                 Object.keys(this.users).forEach(userName => {
@@ -424,11 +417,6 @@ class ManuPuntos {
                 this.currentUser = 'Manu';
             }
         }
-        
-        // Try to load from cloud if sync key exists
-        if (this.syncKey) {
-            this.loadFromCloud();
-        }
     }
 
 
@@ -438,7 +426,7 @@ class ManuPuntos {
         const firebaseConfig = {
             apiKey: "AIzaSyDbVa7lWGhClZD4mumRGtu7Rl_wUWABriY",
             authDomain: "manupuntos-web.firebaseapp.com",
-            databaseURL: "https://manupuntos-web-default-rtdb.firebaseio.com/",
+            databaseURL: "https://manupuntos-web-default-rtdb.europe-west1.firebasedatabase.app/",
             projectId: "manupuntos-web",
             storageBucket: "manupuntos-web.firebasestorage.app",
             messagingSenderId: "610732590615",
@@ -450,15 +438,21 @@ class ManuPuntos {
                 // Initialize Firebase
                 firebase.initializeApp(firebaseConfig);
                 this.database = firebase.database();
-                this.updateSyncStatus('🔧 Firebase connected - Ready to sync');
+                
+                // Auto-enable sync for everyone (no sync keys needed)
+                this.cloudSyncEnabled = true;
+                this.setupCloudSync();
+                this.loadFromCloud();
+                
+                this.updateSyncStatus('🌐 Connected - Data synced across all devices');
                 console.log('Firebase initialized successfully');
             } else {
-                console.warn('Firebase not loaded, sync disabled');
-                this.updateSyncStatus('⚠️ Firebase not loaded - Sync disabled');
+                console.warn('Firebase not loaded, using local storage only');
+                this.updateSyncStatus('💾 Local storage only - No sync');
             }
         } catch (error) {
             console.error('Firebase initialization failed:', error);
-            this.updateSyncStatus('❌ Firebase initialization failed');
+            this.updateSyncStatus('❌ Firebase failed - Using local storage');
         }
     }
 
@@ -473,21 +467,20 @@ class ManuPuntos {
     }
 
     async syncToCloud() {
-        if (!this.cloudSyncEnabled || !this.database || !this.syncKey) {
+        if (!this.cloudSyncEnabled || !this.database) {
             return;
         }
         
         try {
-            this.updateSyncStatus('📤 Syncing to cloud...');
+            this.updateSyncStatus('📤 Syncing...');
             
             const data = {
                 users: this.users,
                 currentUser: this.currentUser,
-                lastUpdated: new Date().toISOString(),
-                syncKey: this.syncKey
+                lastUpdated: new Date().toISOString()
             };
             
-            await this.database.ref('manupuntos/' + this.syncKey).set(data);
+            await this.database.ref('manupuntos').set(data);
             this.updateSyncStatus('✅ Synced successfully');
             
             // Clear status after 3 seconds
@@ -502,14 +495,14 @@ class ManuPuntos {
     }
 
     async loadFromCloud() {
-        if (!this.cloudSyncEnabled || !this.database || !this.syncKey) {
+        if (!this.cloudSyncEnabled || !this.database) {
             return;
         }
         
         try {
             this.updateSyncStatus('📥 Loading from cloud...');
             
-            const snapshot = await this.database.ref('manupuntos/' + this.syncKey).once('value');
+            const snapshot = await this.database.ref('manupuntos').once('value');
             const cloudData = snapshot.val();
             
             if (cloudData && cloudData.users) {
@@ -537,10 +530,10 @@ class ManuPuntos {
     }
 
     setupCloudSync() {
-        if (!this.database || !this.syncKey) return;
+        if (!this.database) return;
         
-        // Listen for real-time changes
-        this.database.ref('manupuntos/' + this.syncKey).on('value', (snapshot) => {
+        // Listen for real-time changes from all devices
+        this.database.ref('manupuntos').on('value', (snapshot) => {
             const cloudData = snapshot.val();
             if (cloudData && cloudData.users) {
                 const cloudLastUpdated = new Date(cloudData.lastUpdated || '1970-01-01');
@@ -565,48 +558,6 @@ class ManuPuntos {
         });
     }
 
-    enableCloudSync() {
-        if (!this.database) {
-            alert('⚠️ Firebase not available. Cloud sync disabled.');
-            return;
-        }
-        
-        const syncKey = prompt('Enter your sync key to sync with another device\n(or leave empty to create new):');
-        if (syncKey && syncKey.trim()) {
-            this.syncKey = syncKey.trim();
-        } else {
-            // Generate a unique sync key
-            this.syncKey = 'manupuntos_' + Math.random().toString(36).substr(2, 16);
-        }
-        
-        this.cloudSyncEnabled = true;
-        this.saveData();
-        
-        // Setup real-time sync
-        this.setupCloudSync();
-        
-        // Initial sync to cloud
-        this.syncToCloud();
-        
-        // Load any existing data from cloud
-        this.loadFromCloud();
-        
-        // Toggle button visibility
-        this.enableSyncBtn.style.display = 'none';
-        this.disableSyncBtn.style.display = 'inline-block';
-        
-        alert(`🌐 Cloud sync enabled!\nYour sync key: ${this.syncKey}\n\nShare this key with your other devices to sync data.`);
-    }
-
-    disableCloudSync() {
-        this.cloudSyncEnabled = false;
-        
-        // Toggle button visibility
-        this.enableSyncBtn.style.display = 'inline-block';
-        this.disableSyncBtn.style.display = 'none';
-        
-        alert('Cloud sync disabled.');
-    }
 
     // User management methods
     addNewUser() {

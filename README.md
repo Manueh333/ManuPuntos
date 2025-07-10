@@ -87,11 +87,11 @@ A simple and intuitive web application for tracking different types of points wi
 - Use "Clear All History" to reset current user's data (requires password)
 - Data persists even if you close and reopen the browser
 
-### Cloud Sync (Optional)
-1. Click "Enable Cloud Sync" to sync data across devices
-2. Share your sync key with other devices to access the same data
-3. Your points will be universal across all synchronized devices
-4. Use "Disable Cloud Sync" to turn off synchronization
+### Automatic Cloud Sync
+- **All devices automatically share the same data**
+- **No setup required** - just open the app and start using
+- **Real-time synchronization** - changes appear instantly on all devices
+- **Universal access** - everyone sees the same users and points
 
 ### Security
 - History clearing is protected with password: `ManuPuntos2025`
