@@ -1,66 +1,106 @@
-// ManuPuntos - Point Tracker Application
+// ManuPuntos - Simplified Point Tracker Application
 class ManuPuntos {
     constructor() {
-        this.users = { 'Manu': { entries: [], currentScore: 0 } };
-        this.currentUser = 'Manu';
+        this.entries = [];
+        this.currentScore = 0;
         this.chart = null;
-        this.cloudSyncEnabled = false;
+        this.missions = [];
         this.firebase = null;
         this.database = null;
-        this.clearHistoryPassword = 'ManuPuntos2025'; // Change this to your preferred password
+        
+        // Initialize when DOM is loaded
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => this.init());
+        } else {
+            this.init();
+        }
+    }
+
+    init() {
+        console.log('Initializing ManuPuntos...');
         this.initializeElements();
+        this.setupEventListeners();
         this.initializeFirebase();
         this.loadData();
-        this.setupEventListeners();
-        this.switchUser('Manu');
         this.initializeChart();
+        this.initializeTheme();
+        this.updateDisplay();
+        this.updateHistory();
+        this.updateMissions();
+        console.log('ManuPuntos initialized successfully');
     }
 
     initializeElements() {
+        // Core elements
         this.scoreElement = document.getElementById('currentScore');
         this.reasonInput = document.getElementById('reason');
+        this.historyList = document.getElementById('historyList');
+        this.chartCanvas = document.getElementById('progressChart');
+        this.themeToggle = document.getElementById('themeToggle');
+        this.missionsList = document.getElementById('missionsList');
+        
+        // Buttons
         this.positiveBtn = document.getElementById('positiveBtn');
         this.neutralBtn = document.getElementById('neutralBtn');
         this.negativeBtn = document.getElementById('negativeBtn');
-        this.bulkQuantityInput = document.getElementById('bulkQuantity');
-        this.bulkTypeSelect = document.getElementById('bulkType');
         this.bulkAddBtn = document.getElementById('bulkAddBtn');
         this.clearHistoryBtn = document.getElementById('clearHistoryBtn');
-        this.historyList = document.getElementById('historyList');
-        this.chartCanvas = document.getElementById('progressChart');
-        this.userSelector = document.getElementById('currentUser');
-        this.addUserBtn = document.getElementById('addUserBtn');
-        this.allUsersStats = document.getElementById('allUsersStats');
-        this.syncStatus = document.getElementById('syncStatus');
-    }
-
-    setupEventListeners() {
-        this.positiveBtn.addEventListener('click', () => this.addPoints(1, 'positive'));
-        this.neutralBtn.addEventListener('click', () => this.addPoints(0, 'neutral'));
-        this.negativeBtn.addEventListener('click', () => this.addPoints(-1, 'negative'));
-        this.bulkAddBtn.addEventListener('click', () => this.addBulkPoints());
-        this.clearHistoryBtn.addEventListener('click', () => this.clearHistory());
-        this.userSelector.addEventListener('change', (e) => this.switchUser(e.target.value));
-        this.addUserBtn.addEventListener('click', () => this.addNewUser());
+        this.addMissionBtn = document.getElementById('addMissionBtn');
         
-        // Clear reason input after adding points
-        [this.positiveBtn, this.neutralBtn, this.negativeBtn].forEach(btn => {
-            btn.addEventListener('click', () => {
-                setTimeout(() => {
-                    this.reasonInput.value = '';
-                }, 100);
-            });
+        // Bulk inputs
+        this.bulkQuantityInput = document.getElementById('bulkQuantity');
+        this.bulkTypeSelect = document.getElementById('bulkType');
+        
+        console.log('Elements initialized:', {
+            scoreElement: !!this.scoreElement,
+            positiveBtn: !!this.positiveBtn,
+            themeToggle: !!this.themeToggle
         });
     }
 
+    setupEventListeners() {
+        console.log('Setting up event listeners...');
+        
+        // Point buttons
+        if (this.positiveBtn) {
+            this.positiveBtn.addEventListener('click', () => this.addPoints(1, 'positive'));
+        }
+        if (this.neutralBtn) {
+            this.neutralBtn.addEventListener('click', () => this.addPoints(0, 'neutral'));
+        }
+        if (this.negativeBtn) {
+            this.negativeBtn.addEventListener('click', () => this.addPoints(-1, 'negative'));
+        }
+        
+        // Bulk operations
+        if (this.bulkAddBtn) {
+            this.bulkAddBtn.addEventListener('click', () => this.addBulkPoints());
+        }
+        
+        // Other buttons
+        if (this.clearHistoryBtn) {
+            this.clearHistoryBtn.addEventListener('click', () => this.clearHistory());
+        }
+        if (this.themeToggle) {
+            this.themeToggle.addEventListener('click', () => this.toggleTheme());
+        }
+        if (this.addMissionBtn) {
+            this.addMissionBtn.addEventListener('click', () => this.addMission());
+        }
+        
+        console.log('Event listeners setup complete');
+    }
+
     addPoints(pointValue, type) {
-        const reason = this.reasonInput.value.trim();
+        const reason = this.reasonInput ? this.reasonInput.value.trim() : '';
         
         if (!reason) {
             alert('Please enter a reason for this point.');
-            this.reasonInput.focus();
+            if (this.reasonInput) this.reasonInput.focus();
             return;
         }
+
+        console.log(`Adding ${pointValue} points of type ${type}`);
 
         const entry = {
             id: Date.now(),
@@ -68,47 +108,52 @@ class ManuPuntos {
             type: type,
             reason: reason,
             timestamp: new Date().toISOString(),
-            runningTotal: this.users[this.currentUser].currentScore + pointValue,
-            user: this.currentUser
+            runningTotal: this.currentScore + pointValue
         };
 
-        this.users[this.currentUser].entries.push(entry);
-        this.users[this.currentUser].currentScore += pointValue;
+        this.entries.push(entry);
+        this.currentScore += pointValue;
+        
+        // Check missions
+        this.checkMissionProgress(entry);
+        
         this.saveData();
         this.updateDisplay();
         this.updateChart();
         this.updateHistory();
+        this.updateMissions();
         this.animateScore();
+        
+        // Clear input
+        if (this.reasonInput) {
+            this.reasonInput.value = '';
+        }
+        
+        console.log('Points added successfully. New score:', this.currentScore);
     }
 
     addBulkPoints() {
-        const quantity = parseInt(this.bulkQuantityInput.value);
-        const type = this.bulkTypeSelect.value;
-        const reason = this.reasonInput.value.trim();
+        const quantity = parseInt(this.bulkQuantityInput?.value);
+        const type = this.bulkTypeSelect?.value;
+        const reason = this.reasonInput ? this.reasonInput.value.trim() : '';
 
         if (!quantity || quantity <= 0) {
             alert('Please enter a valid quantity.');
-            this.bulkQuantityInput.focus();
+            if (this.bulkQuantityInput) this.bulkQuantityInput.focus();
             return;
         }
 
         if (!reason) {
             alert('Please enter a reason for these points.');
-            this.reasonInput.focus();
+            if (this.reasonInput) this.reasonInput.focus();
             return;
         }
 
         let pointValue = 0;
         switch (type) {
-            case 'positive':
-                pointValue = 1;
-                break;
-            case 'negative':
-                pointValue = -1;
-                break;
-            case 'neutral':
-                pointValue = 0;
-                break;
+            case 'positive': pointValue = 1; break;
+            case 'negative': pointValue = -1; break;
+            case 'neutral': pointValue = 0; break;
         }
 
         const totalPoints = pointValue * quantity;
@@ -118,45 +163,54 @@ class ManuPuntos {
             type: type,
             reason: `${reason} (${quantity} ${type} points)`,
             timestamp: new Date().toISOString(),
-            runningTotal: this.users[this.currentUser].currentScore + totalPoints,
+            runningTotal: this.currentScore + totalPoints,
             isBulk: true,
-            bulkQuantity: quantity,
-            user: this.currentUser
+            bulkQuantity: quantity
         };
 
-        this.users[this.currentUser].entries.push(entry);
-        this.users[this.currentUser].currentScore += totalPoints;
+        this.entries.push(entry);
+        this.currentScore += totalPoints;
+        
+        this.checkMissionProgress(entry);
+        
         this.saveData();
         this.updateDisplay();
         this.updateChart();
         this.updateHistory();
+        this.updateMissions();
         this.animateScore();
 
-        // Clear bulk inputs
-        this.bulkQuantityInput.value = '';
-        this.reasonInput.value = '';
+        // Clear inputs
+        if (this.bulkQuantityInput) this.bulkQuantityInput.value = '';
+        if (this.reasonInput) this.reasonInput.value = '';
     }
 
     updateDisplay() {
-        const currentScore = this.users[this.currentUser].currentScore;
-        this.scoreElement.textContent = currentScore;
-        this.scoreElement.classList.remove('negative');
-        
-        if (currentScore < 0) {
-            this.scoreElement.classList.add('negative');
+        if (this.scoreElement) {
+            this.scoreElement.textContent = this.currentScore;
+            this.scoreElement.classList.remove('negative');
+            
+            if (this.currentScore < 0) {
+                this.scoreElement.classList.add('negative');
+            }
         }
-        
-        this.updateAllUsersStats();
     }
 
     animateScore() {
-        this.scoreElement.classList.remove('animate');
-        setTimeout(() => {
-            this.scoreElement.classList.add('animate');
-        }, 10);
+        if (this.scoreElement) {
+            this.scoreElement.classList.remove('animate');
+            setTimeout(() => {
+                this.scoreElement.classList.add('animate');
+            }, 10);
+        }
     }
 
     initializeChart() {
+        if (!this.chartCanvas) {
+            console.error('Chart canvas not found');
+            return;
+        }
+        
         const ctx = this.chartCanvas.getContext('2d');
         
         this.chart = new Chart(ctx, {
@@ -170,85 +224,24 @@ class ManuPuntos {
                     backgroundColor: 'rgba(76, 175, 80, 0.1)',
                     borderWidth: 3,
                     fill: true,
-                    tension: 0.4,
-                    pointBackgroundColor: '#4CAF50',
-                    pointBorderColor: '#fff',
-                    pointBorderWidth: 2,
-                    pointRadius: 6,
-                    pointHoverRadius: 8
+                    tension: 0.4
                 }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                aspectRatio: 2,
-                interaction: {
-                    intersect: false,
-                    mode: 'index'
-                },
                 plugins: {
                     title: {
                         display: true,
-                        text: 'Score Progress Over Time',
-                        font: {
-                            size: 16,
-                            weight: 'bold'
-                        }
+                        text: 'Score Progress Over Time'
                     },
                     legend: {
                         display: false
-                    },
-                    tooltip: {
-                        callbacks: {
-                            title: function(context) {
-                                return context[0].label;
-                            },
-                            label: (context) => {
-                                const dataIndex = context.dataIndex;
-                                const entries = this.users[this.currentUser].entries;
-                                // Adjust for the "Start" point at index 0
-                                const entryIndex = dataIndex === 0 ? -1 : dataIndex - 1;
-                                const entry = entryIndex >= 0 ? entries[entryIndex] : null;
-                                
-                                if (dataIndex === 0) {
-                                    return `Starting Score: ${context.parsed.y}`;
-                                }
-                                
-                                return [
-                                    `Score: ${context.parsed.y}`,
-                                    `Reason: ${entry ? entry.reason : 'N/A'}`
-                                ];
-                            }
-                        },
-                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                        titleColor: '#fff',
-                        bodyColor: '#fff',
-                        borderColor: '#4CAF50',
-                        borderWidth: 1
                     }
                 },
                 scales: {
                     y: {
-                        beginAtZero: true,
-                        grid: {
-                            color: 'rgba(0, 0, 0, 0.1)'
-                        },
-                        ticks: {
-                            font: {
-                                size: 12
-                            }
-                        }
-                    },
-                    x: {
-                        grid: {
-                            color: 'rgba(0, 0, 0, 0.1)'
-                        },
-                        ticks: {
-                            font: {
-                                size: 12
-                            },
-                            maxRotation: 45
-                        }
+                        beginAtZero: true
                     }
                 }
             }
@@ -260,18 +253,16 @@ class ManuPuntos {
     updateChart() {
         if (!this.chart) return;
 
-        const entries = this.users[this.currentUser].entries;
         const labels = [];
         const data = [];
         let runningTotal = 0;
 
-        // Add initial point if we have entries
-        if (entries.length > 0) {
+        if (this.entries.length > 0) {
             labels.push('Start');
             data.push(0);
         }
 
-        entries.forEach(entry => {
+        this.entries.forEach(entry => {
             runningTotal += entry.points;
             const date = new Date(entry.timestamp);
             const label = date.toLocaleString('en-US', {
@@ -290,13 +281,14 @@ class ManuPuntos {
     }
 
     updateHistory() {
-        const entries = this.users[this.currentUser].entries;
-        if (entries.length === 0) {
+        if (!this.historyList) return;
+        
+        if (this.entries.length === 0) {
             this.historyList.innerHTML = '<div class="empty-history">No entries yet. Add some points to get started!</div>';
             return;
         }
 
-        const recentEntries = entries.slice(-10).reverse();
+        const recentEntries = this.entries.slice(-10).reverse();
         const historyHTML = recentEntries.map(entry => {
             const date = new Date(entry.timestamp);
             const formattedDate = date.toLocaleString('en-US', {
@@ -358,71 +350,261 @@ class ManuPuntos {
     }
 
     clearHistory() {
-        const entries = this.users[this.currentUser].entries;
-        if (entries.length === 0) {
+        if (this.entries.length === 0) {
             alert('No history to clear.');
             return;
         }
 
-        const password = prompt(`Enter password to clear history for ${this.currentUser}:`);
-        if (password !== this.clearHistoryPassword) {
+        const password = prompt('Enter password to clear history:');
+        if (password !== 'ManuPuntos2025') {
             alert('Incorrect password. History not cleared.');
             return;
         }
 
-        if (confirm(`Are you sure you want to clear all history for ${this.currentUser}? This action cannot be undone.`)) {
-            this.users[this.currentUser].entries = [];
-            this.users[this.currentUser].currentScore = 0;
+        if (confirm('Are you sure you want to clear all history? This action cannot be undone.')) {
+            this.entries = [];
+            this.currentScore = 0;
             this.saveData();
-            this.syncToCloud();
             this.updateDisplay();
             this.updateChart();
             this.updateHistory();
+            this.updateMissions();
             alert('History cleared successfully!');
         }
     }
 
-    saveData() {
-        const now = new Date().toISOString();
-        const data = {
-            users: this.users,
-            currentUser: this.currentUser,
-            lastUpdated: now
+    // Missions System
+    addMission() {
+        const title = prompt('Enter mission title:');
+        if (!title || !title.trim()) return;
+        
+        const description = prompt('Enter mission description:');
+        if (!description || !description.trim()) return;
+        
+        const targetStr = prompt('Enter target number (e.g., 10 for "do something 10 times"):');
+        const target = parseInt(targetStr);
+        if (isNaN(target) || target <= 0) {
+            alert('Please enter a valid target number.');
+            return;
+        }
+        
+        const rewardStr = prompt('Enter reward points:');
+        const reward = parseInt(rewardStr);
+        if (isNaN(reward) || reward <= 0) {
+            alert('Please enter a valid reward amount.');
+            return;
+        }
+        
+        const conditionOptions = [
+            'total_score - Based on reaching total score',
+            'total_entries - Based on total number of entries',
+            'positive_points - Based on positive points added',
+            'detailed_reasons - Based on detailed reasons (20+ chars)'
+        ];
+        
+        const conditionChoice = prompt('Choose condition type:\n\n' + conditionOptions.join('\n') + '\n\nEnter the condition name (e.g., "total_score"):');
+        
+        const validConditions = ['total_score', 'total_entries', 'positive_points', 'detailed_reasons'];
+        if (!validConditions.includes(conditionChoice)) {
+            alert('Invalid condition. Please choose from: ' + validConditions.join(', '));
+            return;
+        }
+        
+        const mission = {
+            id: Date.now(),
+            title: title.trim(),
+            description: description.trim(),
+            target: target,
+            progress: 0,
+            condition: conditionChoice,
+            reward: reward,
+            completed: false
         };
-        localStorage.setItem('manuPuntosData', JSON.stringify(data));
-        localStorage.setItem('manuPuntosLastUpdated', now);
-        this.syncToCloud();
+        
+        this.missions.push(mission);
+        this.saveData();
+        this.updateMissions();
+        alert('Mission added successfully!');
     }
 
-    loadData() {
-        const savedData = localStorage.getItem('manuPuntosData');
-        if (savedData) {
-            try {
-                const data = JSON.parse(savedData);
-                this.users = data.users || { 'Manu': { entries: [], currentScore: 0 } };
-                this.currentUser = data.currentUser || 'Manu';
-                
-                // Ensure all users have proper structure
-                Object.keys(this.users).forEach(userName => {
-                    if (!this.users[userName].entries) this.users[userName].entries = [];
-                    if (typeof this.users[userName].currentScore !== 'number') this.users[userName].currentScore = 0;
-                });
-                
-                // Update user selector with loaded users
-                this.updateUserSelector();
-                
-            } catch (error) {
-                console.error('Error loading saved data:', error);
-                this.users = { 'Manu': { entries: [], currentScore: 0 } };
-                this.currentUser = 'Manu';
+    checkMissionProgress(entry) {
+        this.missions.forEach(mission => {
+            if (mission.completed) return;
+            
+            switch (mission.condition) {
+                case 'total_score':
+                    mission.progress = Math.max(mission.progress, this.currentScore);
+                    break;
+                    
+                case 'total_entries':
+                    mission.progress = this.entries.length;
+                    break;
+                    
+                case 'positive_points':
+                    if (entry.type === 'positive') {
+                        mission.progress = Math.min(mission.progress + (entry.isBulk ? entry.bulkQuantity : 1), mission.target);
+                    }
+                    break;
+                    
+                case 'detailed_reasons':
+                    if (entry.reason.length >= 20) {
+                        mission.progress = Math.min(mission.progress + 1, mission.target);
+                    }
+                    break;
+            }
+            
+            // Check if mission is completed
+            if (mission.progress >= mission.target && !mission.completed) {
+                mission.completed = true;
+                this.currentScore += mission.reward;
+                this.showMissionCompletedNotification(mission);
+            }
+        });
+    }
+
+    updateMissions() {
+        if (!this.missionsList) return;
+        
+        if (this.missions.length === 0) {
+            this.missionsList.innerHTML = '<p style="text-align: center; color: var(--text-muted); padding: 20px;">No missions created yet. Add some missions to track your progress!</p>';
+            return;
+        }
+        
+        const missionsHTML = this.missions.map(mission => {
+            const progressPercentage = (mission.progress / mission.target) * 100;
+            const isCompleted = mission.completed;
+            
+            return `
+                <div class="mission-card ${isCompleted ? 'completed' : ''}">
+                    <button class="delete-mission-btn" onclick="app.deleteMission(${mission.id})">×</button>
+                    <div class="mission-header">
+                        <h4 class="mission-title">${mission.title}</h4>
+                        <div class="mission-reward">+${mission.reward} pts</div>
+                    </div>
+                    <p class="mission-description">${mission.description}</p>
+                    <div class="mission-progress">
+                        <div class="mission-progress-bar">
+                            <div class="mission-progress-fill" style="width: ${progressPercentage}%"></div>
+                        </div>
+                        <span class="mission-progress-text">${mission.progress}/${mission.target}</span>
+                    </div>
+                    <div class="mission-status">
+                        ${isCompleted ? '✅ Completed!' : '🎯 In Progress'}
+                    </div>
+                </div>
+            `;
+        }).join('');
+        
+        this.missionsList.innerHTML = missionsHTML;
+    }
+
+    deleteMission(missionId) {
+        const missionIndex = this.missions.findIndex(m => m.id === missionId);
+        if (missionIndex > -1) {
+            const mission = this.missions[missionIndex];
+            if (confirm(`Delete mission "${mission.title}"?`)) {
+                this.missions.splice(missionIndex, 1);
+                this.saveData();
+                this.updateMissions();
             }
         }
     }
 
+    showMissionCompletedNotification(mission) {
+        const popup = document.createElement('div');
+        popup.style.cssText = `
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: linear-gradient(135deg, var(--accent-primary), var(--success));
+            color: white;
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: var(--shadow-heavy);
+            z-index: 10000;
+            text-align: center;
+            animation: missionPopup 0.5s ease-out;
+        `;
+        
+        popup.innerHTML = `
+            <div style="font-size: 3rem; margin-bottom: 15px;">🎯</div>
+            <h2 style="margin: 0 0 10px 0;">Mission Completed!</h2>
+            <p style="margin: 0 0 10px 0; font-size: 1.2rem;">${mission.title}</p>
+            <p style="margin: 0; font-weight: 600;">+${mission.reward} points earned!</p>
+        `;
+        
+        document.body.appendChild(popup);
+        setTimeout(() => {
+            popup.remove();
+        }, 3000);
+        
+        // Add CSS animation if not exists
+        if (!document.getElementById('mission-style')) {
+            const style = document.createElement('style');
+            style.id = 'mission-style';
+            style.textContent = `
+                @keyframes missionPopup {
+                    0% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
+                    50% { transform: translate(-50%, -50%) scale(1.1); }
+                    100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+    }
 
-    // Firebase initialization and cloud sync functionality
+    // Theme management
+    initializeTheme() {
+        const savedTheme = localStorage.getItem('manuPuntosTheme') || 'light';
+        console.log('Initializing theme. Saved theme:', savedTheme);
+        this.setTheme(savedTheme);
+    }
+
+    toggleTheme() {
+        console.log('Toggling theme...');
+        const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+        const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+        this.setTheme(newTheme);
+    }
+
+    setTheme(theme) {
+        console.log('Setting theme to:', theme);
+        document.documentElement.setAttribute('data-theme', theme);
+        localStorage.setItem('manuPuntosTheme', theme);
+        
+        // Update theme icon
+        if (this.themeToggle) {
+            const themeIcon = this.themeToggle.querySelector('.theme-icon');
+            if (themeIcon) {
+                themeIcon.textContent = theme === 'light' ? '🌙' : '☀️';
+            }
+        }
+        
+        // Update chart colors if chart exists
+        if (this.chart) {
+            this.updateChartTheme(theme);
+        }
+    }
+
+    updateChartTheme(theme) {
+        const isDark = theme === 'dark';
+        const textColor = isDark ? '#f7fafc' : '#2d3748';
+        const gridColor = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+        
+        if (this.chart && this.chart.options) {
+            this.chart.options.plugins.title.color = textColor;
+            this.chart.options.scales.x.ticks.color = textColor;
+            this.chart.options.scales.y.ticks.color = textColor;
+            this.chart.options.scales.x.grid.color = gridColor;
+            this.chart.options.scales.y.grid.color = gridColor;
+            
+            this.chart.update();
+        }
+    }
+
+    // Firebase initialization and cloud sync
     initializeFirebase() {
-        // Firebase configuration for ManuPuntos
         const firebaseConfig = {
             apiKey: "AIzaSyDbVa7lWGhClZD4mumRGtu7Rl_wUWABriY",
             authDomain: "manupuntos-web.firebaseapp.com",
@@ -435,221 +617,126 @@ class ManuPuntos {
 
         try {
             if (typeof firebase !== 'undefined') {
-                // Initialize Firebase
                 firebase.initializeApp(firebaseConfig);
                 this.database = firebase.database();
                 
-                // Auto-enable sync for everyone (no sync keys needed)
-                this.cloudSyncEnabled = true;
+                // Enable auto-sync
                 this.setupCloudSync();
                 this.loadFromCloud();
                 
-                this.updateSyncStatus('🌐 Connected - Data synced across all devices');
+                // Sync every 5 seconds
+                setInterval(() => {
+                    this.syncToCloud();
+                }, 5000);
+                
                 console.log('Firebase initialized successfully');
             } else {
                 console.warn('Firebase not loaded, using local storage only');
-                this.updateSyncStatus('💾 Local storage only - No sync');
             }
         } catch (error) {
             console.error('Firebase initialization failed:', error);
-            this.updateSyncStatus('❌ Firebase failed - Using local storage');
-        }
-    }
-
-    updateSyncStatus(message) {
-        if (this.syncStatus) {
-            this.syncStatus.textContent = message;
-            this.syncStatus.className = 'sync-status ' + 
-                (message.includes('✅') ? 'success' : 
-                 message.includes('❌') ? 'error' : 
-                 message.includes('⚠️') ? 'warning' : 'info');
         }
     }
 
     async syncToCloud() {
-        if (!this.cloudSyncEnabled || !this.database) {
-            return;
-        }
+        if (!this.database) return;
         
         try {
-            this.updateSyncStatus('📤 Syncing...');
-            
             const data = {
-                users: this.users,
-                currentUser: this.currentUser,
+                entries: this.entries,
+                currentScore: this.currentScore,
+                missions: this.missions,
                 lastUpdated: new Date().toISOString()
             };
             
             await this.database.ref('manupuntos').set(data);
-            this.updateSyncStatus('✅ Synced successfully');
-            
-            // Clear status after 3 seconds
-            setTimeout(() => {
-                this.updateSyncStatus('🌐 Cloud sync enabled');
-            }, 3000);
-            
         } catch (error) {
             console.error('Cloud sync failed:', error);
-            this.updateSyncStatus('❌ Sync failed: ' + error.message);
         }
     }
 
     async loadFromCloud() {
-        if (!this.cloudSyncEnabled || !this.database) {
-            return;
-        }
+        if (!this.database) return;
         
         try {
-            this.updateSyncStatus('📥 Loading from cloud...');
-            
             const snapshot = await this.database.ref('manupuntos').once('value');
             const cloudData = snapshot.val();
             
-            if (cloudData && cloudData.users) {
-                // Merge cloud data with local data
+            if (cloudData && cloudData.entries) {
                 const localLastUpdated = new Date(localStorage.getItem('manuPuntosLastUpdated') || '1970-01-01');
                 const cloudLastUpdated = new Date(cloudData.lastUpdated || '1970-01-01');
                 
                 if (cloudLastUpdated > localLastUpdated) {
-                    this.users = cloudData.users;
-                    this.currentUser = cloudData.currentUser || 'Manu';
-                    this.updateUserSelector();
-                    this.switchUser(this.currentUser);
-                    this.updateSyncStatus('✅ Data loaded from cloud');
-                } else {
-                    this.updateSyncStatus('ℹ️ Local data is newer');
+                    this.entries = cloudData.entries || [];
+                    this.currentScore = cloudData.currentScore || 0;
+                    this.missions = cloudData.missions || [];
+                    this.updateDisplay();
+                    this.updateChart();
+                    this.updateHistory();
+                    this.updateMissions();
                 }
-            } else {
-                this.updateSyncStatus('ℹ️ No cloud data found');
             }
-            
         } catch (error) {
             console.error('Failed to load from cloud:', error);
-            this.updateSyncStatus('❌ Failed to load from cloud');
         }
     }
 
     setupCloudSync() {
         if (!this.database) return;
         
-        // Listen for real-time changes from all devices
         this.database.ref('manupuntos').on('value', (snapshot) => {
             const cloudData = snapshot.val();
-            if (cloudData && cloudData.users) {
+            if (cloudData && cloudData.entries) {
                 const cloudLastUpdated = new Date(cloudData.lastUpdated || '1970-01-01');
                 const localLastUpdated = new Date(localStorage.getItem('manuPuntosLastUpdated') || '1970-01-01');
                 
-                // Only update if cloud data is newer and we didn't just update it
                 if (cloudLastUpdated > localLastUpdated && 
-                    Math.abs(cloudLastUpdated - new Date()) > 2000) { // 2 second buffer
+                    Math.abs(cloudLastUpdated - new Date()) > 3000) {
                     
-                    this.users = cloudData.users;
-                    this.currentUser = cloudData.currentUser || this.currentUser;
-                    this.updateUserSelector();
-                    this.switchUser(this.currentUser);
-                    this.updateSyncStatus('🔄 Synced from another device');
-                    
-                    // Clear status after 3 seconds
-                    setTimeout(() => {
-                        this.updateSyncStatus('🌐 Cloud sync enabled');
-                    }, 3000);
+                    this.entries = cloudData.entries || [];
+                    this.currentScore = cloudData.currentScore || 0;
+                    this.missions = cloudData.missions || [];
+                    this.updateDisplay();
+                    this.updateChart();
+                    this.updateHistory();
+                    this.updateMissions();
                 }
             }
         });
     }
 
+    // Data persistence
+    saveData() {
+        const now = new Date().toISOString();
+        const data = {
+            entries: this.entries,
+            currentScore: this.currentScore,
+            missions: this.missions,
+            lastUpdated: now
+        };
+        localStorage.setItem('manuPuntosData', JSON.stringify(data));
+        localStorage.setItem('manuPuntosLastUpdated', now);
+        this.syncToCloud();
+    }
 
-    // User management methods
-    addNewUser() {
-        const userName = prompt('Enter name for new user:');
-        if (!userName || userName.trim() === '') {
-            alert('Please enter a valid name.');
-            return;
+    loadData() {
+        const savedData = localStorage.getItem('manuPuntosData');
+        if (savedData) {
+            try {
+                const data = JSON.parse(savedData);
+                this.entries = data.entries || [];
+                this.currentScore = data.currentScore || 0;
+                this.missions = data.missions || [];
+            } catch (error) {
+                console.error('Error loading saved data:', error);
+                this.entries = [];
+                this.currentScore = 0;
+                this.missions = [];
+            }
         }
-        
-        const cleanName = userName.trim();
-        if (this.users[cleanName]) {
-            alert('User already exists!');
-            return;
-        }
-        
-        this.users[cleanName] = { entries: [], currentScore: 0 };
-        this.updateUserSelector();
-        this.saveData();
-        this.switchUser(cleanName);
-        alert(`User "${cleanName}" added successfully!`);
-    }
-
-    switchUser(userName) {
-        this.currentUser = userName;
-        this.userSelector.value = userName;
-        this.updateDisplay();
-        this.updateChart();
-        this.updateHistory();
-    }
-
-    updateUserSelector() {
-        this.userSelector.innerHTML = '';
-        Object.keys(this.users).forEach(userName => {
-            const option = document.createElement('option');
-            option.value = userName;
-            option.textContent = userName;
-            this.userSelector.appendChild(option);
-        });
-    }
-
-    updateAllUsersStats() {
-        const statsHTML = Object.keys(this.users).map(userName => {
-            const user = this.users[userName];
-            const totalEntries = user.entries.length;
-            const positiveEntries = user.entries.filter(e => e.points > 0).length;
-            const negativeEntries = user.entries.filter(e => e.points < 0).length;
-            const neutralEntries = user.entries.filter(e => e.points === 0).length;
-            
-            const lastEntry = user.entries.length > 0 ? 
-                new Date(user.entries[user.entries.length - 1].timestamp).toLocaleDateString() : 
-                'No entries';
-            
-            return `
-                <div class="user-stats-card ${userName === this.currentUser ? 'current-user' : ''}">
-                    <div class="user-stats-header">
-                        <h4>${userName}</h4>
-                        <div class="user-score ${user.currentScore < 0 ? 'negative' : 'positive'}">
-                            ${user.currentScore}
-                        </div>
-                    </div>
-                    <div class="user-stats-details">
-                        <div class="stat-item">
-                            <span class="stat-label">Total Entries:</span>
-                            <span class="stat-value">${totalEntries}</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-label">Positive:</span>
-                            <span class="stat-value positive">${positiveEntries}</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-label">Negative:</span>
-                            <span class="stat-value negative">${negativeEntries}</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-label">Neutral:</span>
-                            <span class="stat-value neutral">${neutralEntries}</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-label">Last Entry:</span>
-                            <span class="stat-value">${lastEntry}</span>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }).join('');
-        
-        this.allUsersStats.innerHTML = statsHTML;
     }
 }
 
-// Initialize the application when the page loads
-document.addEventListener('DOMContentLoaded', () => {
-    new ManuPuntos();
-});
+// Initialize the application
+window.app = new ManuPuntos();
 

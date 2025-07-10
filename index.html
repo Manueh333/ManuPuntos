@@ -6,7 +6,6 @@
     <title>ManuPuntos - Point Tracker</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/date-fns@2.29.3/index.min.js"></script>
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
@@ -14,16 +13,24 @@
 <body>
     <div class="container">
         <header>
-            <h1>ManuPuntos</h1>
-            <p>Track your progress with points and reasons</p>
-            <div class="user-selector">
-                <label for="currentUser">Current User:</label>
-                <select id="currentUser">
-                    <option value="Manu">Manu</option>
-                </select>
-                <button id="addUserBtn" class="btn-small">Add User</button>
+            <div class="header-top">
+                <div class="logo-section">
+                    <div class="logo-icon">📊</div>
+                    <div class="logo-text">
+                        <h1>ManuPuntos</h1>
+                        <p>Smart Point Tracking System</p>
+                    </div>
+                </div>
+                <button id="themeToggle" class="theme-toggle" title="Toggle dark mode">
+                    <span class="theme-icon">🌙</span>
+                </button>
+            </div>
+            <div class="user-greeting">
+                <h2>¡Hola, Manu! 👋</h2>
+                <p>Ready to track your progress today?</p>
             </div>
         </header>
+
 
         <main>
             <div class="score-display">
@@ -31,54 +38,91 @@
                 <div id="currentScore" class="score">0</div>
             </div>
 
-            <div class="input-section">
+            <div class="input-section glass-card">
+                <div class="section-header">
+                    <h3><span class="icon">✏️</span> Add Points</h3>
+                </div>
+                
                 <div class="reason-input">
                     <label for="reason">Reason:</label>
-                    <textarea id="reason" placeholder="Enter a reason for this point..."></textarea>
+                    <textarea id="reason" placeholder="What happened? Tell us the story..."></textarea>
                 </div>
 
                 <div class="buttons">
-                    <button id="positiveBtn" class="btn positive">+1 Point</button>
-                    <button id="neutralBtn" class="btn neutral">Neutral Point</button>
-                    <button id="negativeBtn" class="btn negative">-1 Point</button>
+                    <button id="positiveBtn" class="btn positive">
+                        <span class="btn-icon">➕</span>
+                        <span class="btn-text">+1 Point</span>
+                    </button>
+                    <button id="neutralBtn" class="btn neutral">
+                        <span class="btn-icon">⏺</span>
+                        <span class="btn-text">Neutral</span>
+                    </button>
+                    <button id="negativeBtn" class="btn negative">
+                        <span class="btn-icon">➖</span>
+                        <span class="btn-text">-1 Point</span>
+                    </button>
                 </div>
 
                 <div class="bulk-input">
-                    <h3>Add Multiple Points</h3>
+                    <div class="bulk-header">
+                        <span class="icon">🔢</span>
+                        <h4>Bulk Operations</h4>
+                    </div>
                     <div class="bulk-controls">
-                        <input type="number" id="bulkQuantity" placeholder="Quantity" min="1" max="100">
-                        <select id="bulkType">
-                            <option value="positive">Positive (+1 each)</option>
-                            <option value="neutral">Neutral (0 each)</option>
-                            <option value="negative">Negative (-1 each)</option>
-                        </select>
-                        <button id="bulkAddBtn" class="btn bulk">Add Bulk Points</button>
+                        <div class="input-group">
+                            <input type="number" id="bulkQuantity" placeholder="Qty" min="1" max="100">
+                            <select id="bulkType">
+                                <option value="positive">➕ Positive</option>
+                                <option value="neutral">⏺ Neutral</option>
+                                <option value="negative">➖ Negative</option>
+                            </select>
+                        </div>
+                        <button id="bulkAddBtn" class="btn bulk">
+                            <span>⚡</span> Execute
+                        </button>
                     </div>
                 </div>
             </div>
 
-            <div class="chart-section">
-                <h3>Progress Over Time</h3>
-                <div class="chart-container">
-                    <canvas id="progressChart"></canvas>
+            <div class="chart-section glass-card">
+                <div class="section-header">
+                    <h3><span class="icon">📈</span> Progress Analytics</h3>
+                </div>
+                <div class="charts-grid">
+                    <div class="chart-container">
+                        <h4>Score Over Time</h4>
+                        <canvas id="progressChart"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <h4>Progress Distribution</h4>
+                        <canvas id="progressPieChart"></canvas>
+                    </div>
                 </div>
             </div>
-
-            <div class="all-users-section">
-                <h3>All Users Stats</h3>
-                <div id="allUsersStats" class="users-stats-grid"></div>
+            
+            <!-- Custom Missions Section -->
+            <div class="missions-section glass-card">
+                <div class="section-header">
+                    <h3><span class="icon">🎯</span> Custom Missions</h3>
+                    <button id="addMissionBtn" class="btn-small missions-btn">
+                        <span>➕</span> Add Mission
+                    </button>
+                </div>
+                <div id="missionsList" class="missions-list"></div>
             </div>
 
-            <div class="history-section">
-                <h3>Recent Entries</h3>
+            <div class="history-section glass-card">
+                <div class="section-header">
+                    <h3><span class="icon">📜</span> Activity Log</h3>
+                    <button id="clearHistoryBtn" class="btn-small clear">
+                        <span>🗑️</span> Clear History
+                    </button>
+                </div>
                 <div id="historyList" class="history-list"></div>
-                <div class="history-controls">
-                    <button id="clearHistoryBtn" class="btn clear">Clear All History</button>
-                </div>
-                <div id="syncStatus" class="sync-status"></div>
             </div>
         </main>
     </div>
+
 
     <script src="script.js"></script>
 </body>
